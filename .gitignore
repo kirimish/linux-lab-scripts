@@ -1,0 +1,15 @@
+# Compiled files
+*.o
+*.exe
+
+# Temporary files
+*.tmp
+*~
+
+# IDE files
+.idea/
+.vscode/
+
+# Build directories
+build/
+dist/
