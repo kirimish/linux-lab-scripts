@@ -1,0 +1,17 @@
+name: Lint Bash Scripts
+
+on: [push, pull_request]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+
+      - name: Syntax check
+        run: |
+          for script in $(find . -maxdepth 2 -name "*.sh"); do
+            echo "Checking syntax of $script..."
+            bash -n "$script"
+          done
