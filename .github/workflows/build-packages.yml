@@ -1,71 +1,126 @@
-name: Build Packages
+name: Build and Release Packages
 
 on:
   push:
-    branches: [ main ]
+    branches: [ "main" ]
+    tags: [ "v*" ]
   pull_request:
-    branches: [ main ]
+    branches: [ "main" ]
   workflow_dispatch:
 
 jobs:
-  build-rpm:
+  # Job для тестування скрипта
+  test:
+    name: Test Script
     runs-on: ubuntu-latest
-    container: fedora:latest
     steps:
-      - name: Checkout repository
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install build tools
+      - name: Check Bash Syntax
+        run: bash -n count_files.sh
+
+      - name: Test Script Execution
         run: |
-          dnf install -y rpm-build rpmdevtools gcc make tar
+          chmod +x count_files.sh
+          ./count_files.sh /etc
 
-      - name: Setup RPM build environment
-        run: rpmdev-setuptree
+  # Job збірки RPM з матрицею дистрибутивів та кешуванням
+  build-rpm:
+    name: Build RPM Package
+    needs: test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        fedora_version: ["39", "40"]
+    container:
+      image: fedora:${{ matrix.fedora_version }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - name: Prepare sources
-        run: |
-          mkdir -p ~/rpmbuild/SOURCES/count-files-1.0
-          cp count_files.sh ~/rpmbuild/SOURCES/count-files-1.0/
-          cd ~/rpmbuild/SOURCES
-          tar czvf count-files-1.0.tar.gz count-files-1.0
+      - name: Cache DNF Packages
+        uses: actions/cache@v4
+        with:
+          path: /var/cache/dnf
+          key: dnf-fedora-${{ matrix.fedora_version }}-${{ hashFiles('packaging/rpm/count-files.spec') }}
+          restore-keys: |
+            dnf-fedora-${{ matrix.fedora_version }}-
 
-      - name: Copy spec file
-        run: cp packaging/rpm/count-files.spec ~/rpmbuild/SPECS/
+      - name: Install dependencies
+        run: dnf install -y rpm-build rpmdevtools bash coreutils findutils tar
 
       - name: Build RPM
-        run: rpmbuild -ba ~/rpmbuild/SPECS/count-files.spec
+        run: |
+          mkdir -p ~/rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
+          tar -czf ~/rpmbuild/SOURCES/count-files-1.0.tar.gz --transform 's|^|count-files-1.0/|' count_files.sh
+          cp packaging/rpm/count-files.spec ~/rpmbuild/SPECS/
+          rpmbuild -ba ~/rpmbuild/SPECS/count-files.spec
+          mkdir -p output/
+          cp ~/rpmbuild/RPMS/noarch/*.rpm output/
 
-      - name: Upload RPM artifact
+      - name: Upload RPM Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: rpm-package
-          path: ~/rpmbuild/RPMS/noarch/*.rpm
+          name: rpm-package-fedora${{ matrix.fedora_version }}
+          path: output/*.rpm
 
+  # Job збірки DEB з матрицею дистрибутивів та кешуванням
   build-deb:
-    runs-on: ubuntu-latest
+    name: Build DEB Package
+    needs: test
+    runs-on: ubuntu-${{ matrix.ubuntu_version }}
+    strategy:
+      matrix:
+        ubuntu_version: ["22.04", "24.04"]
     steps:
-      - name: Checkout repository
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install build tools
+      - name: Cache APT Packages
+        uses: actions/cache@v4
+        with:
+          path: /var/cache/apt/archives
+          key: apt-ubuntu-${{ matrix.ubuntu_version }}-${{ hashFiles('packaging/deb/debian/control') }}
+          restore-keys: |
+            apt-ubuntu-${{ matrix.ubuntu_version }}-
+
+      - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential debhelper devscripts dh-make
+          sudo apt-get install -y debhelper devscripts build-essential
 
-      - name: Prepare build directory
+      - name: Build DEB Package
         run: |
-          mkdir -p build/count-files-1.0
-          cp count_files.sh build/count-files-1.0/count_files
-          chmod +x build/count-files-1.0/count_files
-          cp -r packaging/deb/debian build/count-files-1.0/
-
-      - name: Build DEB
-        run: |
-          cd build/count-files-1.0
+          cd packaging/deb
           dpkg-buildpackage -us -uc -b
+          cd ../..
+          mkdir -p output/
+          cp packaging/*.deb output/
 
-      - name: Upload DEB artifact
+      - name: Upload DEB Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: deb-package
-          path: build/*.deb
+          name: deb-package-ubuntu${{ matrix.ubuntu_version }}
+          path: output/*.deb
+
+  # Job для автоматичного створення GitHub Release та публікації пакетів
+  release:
+    name: Create GitHub Release
+    needs: [build-rpm, build-deb]
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets/
+
+      - name: Create Release and Upload Packages
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release-assets/**/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
