@@ -65,7 +65,7 @@ jobs:
           name: rpm-package-fedora${{ matrix.fedora_version }}
           path: output/*.rpm
 
-  # 3. Сборка DEB (Ubuntu 22.04 / 24.04)
+  # 3. Автоматическая чистая сборка DEB (Ubuntu 22.04 / 24.04)
   build-deb:
     name: Build DEB Package
     needs: test
@@ -81,7 +81,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: /var/cache/apt/archives
-          key: apt-ubuntu-${{ matrix.ubuntu_version }}-${{ hashFiles('packaging/deb/debian/control') }}
+          key: apt-ubuntu-${{ matrix.ubuntu_version }}-${{ hashFiles('count_files.sh') }}
           restore-keys: |
             apt-ubuntu-${{ matrix.ubuntu_version }}-
 
@@ -90,23 +90,43 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y debhelper devscripts build-essential
 
-      - name: Build DEB Package
+      - name: Generate Clean DEB Package Structure
         run: |
-          # Очистка временных файлов debhelper
-          rm -rf packaging/deb/debian/count-files packaging/deb/debian/.debhelper packaging/deb/debian/debhelper-build-stamp packaging/deb/debian/files packaging/deb/debian/*.substvars
-          
-          # Подготовка файлов
-          cp count_files.sh packaging/deb/
+          rm -rf packaging/deb
+          mkdir -p packaging/deb/debian
+
+          cp count_files.sh packaging/deb/count_files.sh
           chmod +x packaging/deb/count_files.sh
-          
-          # Генерируем правильный debian/rules с реальным символом табуляции (\t)
+
+          cat << 'EOF' > packaging/deb/debian/control
+          Source: count-files
+          Section: utils
+          Priority: optional
+          Maintainer: Kirienko Mykhailo <fhidxh7@gmail.com>
+          Build-Depends: debhelper-compat (= 13)
+          Standards-Version: 4.6.2
+
+          Package: count-files
+          Architecture: all
+          Depends: ${misc:Depends}, bash, coreutils, findutils
+          Description: Script to count regular files in /etc
+           A Bash script that counts regular files in /etc directory.
+          EOF
+
+          cat << 'EOF' > packaging/deb/debian/changelog
+          count-files (1.0-1) unstable; urgency=medium
+
+            * Initial release.
+
+           -- Kirienko Mykhailo <fhidxh7@gmail.com>  Thu, 18 Dec 2025 16:48:00 +0000
+          EOF
+
+          echo "count_files.sh usr/bin" > packaging/deb/debian/install
           printf '#!/usr/bin/make -f\n%%:\n\tdh %%s\n' '$@' > packaging/deb/debian/rules
           chmod +x packaging/deb/debian/rules
-          
-          # Убеждаемся в наличии правильного debian/install
-          echo "count_files.sh usr/bin" > packaging/deb/debian/install
-          
-          # Сборка пакета
+
+      - name: Build DEB Package
+        run: |
           cd packaging/deb
           dpkg-buildpackage -us -uc -b
           cd ../..
