@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  # Job для тестування скрипта
+  # Тестирование скрипта
   test:
     name: Test Script
     runs-on: ubuntu-latest
@@ -25,7 +25,7 @@ jobs:
           chmod +x count_files.sh
           ./count_files.sh /etc
 
-  # Job збірки RPM з матрицею дистрибутивів та кешуванням
+  # Зборка RPM
   build-rpm:
     name: Build RPM Package
     needs: test
@@ -65,7 +65,7 @@ jobs:
           name: rpm-package-fedora${{ matrix.fedora_version }}
           path: output/*.rpm
 
-  # Job збірки DEB з матрицею дистрибутивів та кешуванням
+  # Зборка DEB
   build-deb:
     name: Build DEB Package
     needs: test
@@ -92,6 +92,8 @@ jobs:
 
       - name: Build DEB Package
         run: |
+          chmod +x packaging/deb/debian/rules
+          rm -rf packaging/deb/debian/count-files packaging/deb/debian/debhelper-build-stamp packaging/deb/debian/files packaging/deb/debian/*.substvars
           cd packaging/deb
           dpkg-buildpackage -us -uc -b
           cd ../..
@@ -104,7 +106,7 @@ jobs:
           name: deb-package-ubuntu${{ matrix.ubuntu_version }}
           path: output/*.deb
 
-  # Job для автоматичного створення GitHub Release та публікації пакетів
+  # Публикация GitHub Release
   release:
     name: Create GitHub Release
     needs: [build-rpm, build-deb]
