@@ -92,6 +92,7 @@ jobs:
 
       - name: Build DEB Package
         run: |
+          cp count_files.sh packaging/deb/
           chmod +x packaging/deb/debian/rules
           rm -rf packaging/deb/debian/count-files packaging/deb/debian/debhelper-build-stamp packaging/deb/debian/files packaging/deb/debian/*.substvars
           cd packaging/deb
