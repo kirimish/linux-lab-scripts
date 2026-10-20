@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  # Тестирование скрипта
+  # 1. Тестирование скрипта
   test:
     name: Test Script
     runs-on: ubuntu-latest
@@ -25,7 +25,7 @@ jobs:
           chmod +x count_files.sh
           ./count_files.sh /etc
 
-  # Зборка RPM
+  # 2. Сборка RPM (Fedora 39 / 40)
   build-rpm:
     name: Build RPM Package
     needs: test
@@ -65,8 +65,8 @@ jobs:
           name: rpm-package-fedora${{ matrix.fedora_version }}
           path: output/*.rpm
 
-  # Зборка DEB
-build-deb:
+  # 3. Сборка DEB (Ubuntu 22.04 / 24.04)
+  build-deb:
     name: Build DEB Package
     needs: test
     runs-on: ubuntu-${{ matrix.ubuntu_version }}
@@ -88,16 +88,25 @@ build-deb:
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y debhelper devscripts build-essential dos2unix
+          sudo apt-get install -y debhelper devscripts build-essential
 
       - name: Build DEB Package
         run: |
+          # Очистка временных файлов debhelper
+          rm -rf packaging/deb/debian/count-files packaging/deb/debian/.debhelper packaging/deb/debian/debhelper-build-stamp packaging/deb/debian/files packaging/deb/debian/*.substvars
+          
+          # Подготовка файлов
           cp count_files.sh packaging/deb/
           chmod +x packaging/deb/count_files.sh
+          
+          # Генерируем правильный debian/rules с реальным символом табуляции (\t)
+          printf '#!/usr/bin/make -f\n%%:\n\tdh %%s\n' '$@' > packaging/deb/debian/rules
           chmod +x packaging/deb/debian/rules
-          sed -i 's/\r$//' packaging/deb/debian/rules
-          sed -i 's/\r$//' packaging/deb/debian/control
-          rm -rf packaging/deb/debian/count-files packaging/deb/debian/.debhelper packaging/deb/debian/debhelper-build-stamp packaging/deb/debian/files packaging/deb/debian/*.substvars
+          
+          # Убеждаемся в наличии правильного debian/install
+          echo "count_files.sh usr/bin" > packaging/deb/debian/install
+          
+          # Сборка пакета
           cd packaging/deb
           dpkg-buildpackage -us -uc -b
           cd ../..
@@ -109,7 +118,8 @@ build-deb:
         with:
           name: deb-package-ubuntu${{ matrix.ubuntu_version }}
           path: output/*.deb
-  # Публикация GitHub Release
+
+  # 4. Публикация релиза на GitHub
   release:
     name: Create GitHub Release
     needs: [build-rpm, build-deb]
