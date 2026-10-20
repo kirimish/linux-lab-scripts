@@ -88,13 +88,16 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y debhelper devscripts build-essential
+          sudo apt-get install -y debhelper devscripts build-essential dos2unix
 
       - name: Build DEB Package
         run: |
           cp count_files.sh packaging/deb/
+          chmod +x packaging/deb/count_files.sh
           chmod +x packaging/deb/debian/rules
-          rm -rf packaging/deb/debian/count-files packaging/deb/debian/debhelper-build-stamp packaging/deb/debian/files packaging/deb/debian/*.substvars
+          sed -i 's/\r$//' packaging/deb/debian/rules
+          sed -i 's/\r$//' packaging/deb/debian/control
+          rm -rf packaging/deb/debian/count-files packaging/deb/debian/.debhelper packaging/deb/debian/debhelper-build-stamp packaging/deb/debian/files packaging/deb/debian/*.substvars
           cd packaging/deb
           dpkg-buildpackage -us -uc -b
           cd ../..
@@ -106,7 +109,6 @@ jobs:
         with:
           name: deb-package-ubuntu${{ matrix.ubuntu_version }}
           path: output/*.deb
-
   # Публикация GitHub Release
   release:
     name: Create GitHub Release
