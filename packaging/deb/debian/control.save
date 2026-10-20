@@ -1,0 +1,15 @@
+Source: count-files
+Section: utils
+Priority: optional
+Maintainer: Kirienko Mykhailo <fhidxh7@gmail.com>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.5.1
+Homepage: https://github.com/kirimish/linux-lab-scripts
+
+Package: count-files
+Architecture: all
+Depends: ${misc:Depends}, bash, coreutils, findutils
+Description: Script to count regular files in /etc
+ A Bash script that counts the number of regular files
+ in the /etc directory, excluding directories and
+ symbolic links.
