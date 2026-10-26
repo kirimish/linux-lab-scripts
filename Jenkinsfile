@@ -41,6 +41,7 @@ pipeline {
                     rpmbuild -ba ~/rpmbuild/SPECS/count-files.spec
                     cp ~/rpmbuild/RPMS/noarch/*.rpm ${WORKSPACE}/
                 '''
+                stash includes: '*.rpm', name: 'rpm-package'
             }
         }
 
@@ -64,6 +65,7 @@ pipeline {
                     dpkg-buildpackage -us -uc -b
                     cp ../*.deb ${WORKSPACE}/
                 '''
+                stash includes: '*.deb', name: 'deb-package'
             }
         }
 
@@ -75,6 +77,7 @@ pipeline {
                 }
             }
             steps {
+                unstash 'rpm-package'
                 sh '''
                     rpm -ivh ${PACKAGE_NAME}-*.rpm
                     count_files
@@ -91,6 +94,7 @@ pipeline {
                 }
             }
             steps {
+                unstash 'deb-package'
                 sh '''
                     dpkg -i ${PACKAGE_NAME}_*.deb || apt-get install -f -y
                     count_files
@@ -98,12 +102,19 @@ pipeline {
                 '''
             }
         }
+
+        stage('Archive Artifacts') {
+            steps {
+                unstash 'rpm-package'
+                unstash 'deb-package'
+                archiveArtifacts artifacts: '*.rpm, *.deb', allowEmptyArchive: false
+            }
+        }
     }
 
     post {
         success {
-            archiveArtifacts artifacts: '*.rpm, *.deb'
-            echo 'Build completed successfully!'
+            echo 'Build and packaging completed successfully!'
         }
         failure {
             echo 'Build failed!'
