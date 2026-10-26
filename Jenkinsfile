@@ -1,6 +1,10 @@
 pipeline {
     agent any
 
+    options {
+        skipDefaultCheckout()
+    }
+
     environment {
         PACKAGE_NAME = 'count-files'
         PACKAGE_VERSION = '1.0'
