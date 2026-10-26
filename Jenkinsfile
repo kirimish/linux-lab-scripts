@@ -91,8 +91,7 @@ pipeline {
             }
         }
 
-        stage
-('Test DEB Installation') {
+        stage('Test DEB Installation') {
             agent {
                 docker {
                     image 'ubuntu:latest'
