@@ -40,8 +40,10 @@ pipeline {
                     cp ${WORKSPACE}/packaging/rpm/count-files.spec ~/rpmbuild/SPECS/
                     rpmbuild -ba ~/rpmbuild/SPECS/count-files.spec
                     cp ~/rpmbuild/RPMS/noarch/*.rpm ${WORKSPACE}/
+                    chown -R 1000:1000 ${WORKSPACE}/*.rpm
                 '''
                 stash includes: '*.rpm', name: 'rpm-package'
+                sh 'rm -f *.rpm'
             }
         }
 
@@ -64,8 +66,10 @@ pipeline {
                     chmod +x count_files count_files.sh
                     dpkg-buildpackage -us -uc -b
                     cp ../*.deb ${WORKSPACE}/
+                    chown -R 1000:1000 ${WORKSPACE}/*.deb
                 '''
                 stash includes: '*.deb', name: 'deb-package'
+                sh 'rm -f *.deb'
             }
         }
 
@@ -82,11 +86,13 @@ pipeline {
                     rpm -ivh ${PACKAGE_NAME}-*.rpm
                     count_files
                     rpm -e ${PACKAGE_NAME}
+                    rm -f *.rpm
                 '''
             }
         }
 
-        stage('Test DEB Installation') {
+        stage
+('Test DEB Installation') {
             agent {
                 docker {
                     image 'ubuntu:latest'
@@ -99,6 +105,7 @@ pipeline {
                     dpkg -i ${PACKAGE_NAME}_*.deb || apt-get install -f -y
                     count_files
                     apt-get remove -y ${PACKAGE_NAME}
+                    rm -f *.deb
                 '''
             }
         }
