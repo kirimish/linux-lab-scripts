@@ -2,14 +2,12 @@ pipeline {
     agent any
 
     options {
-        skipDefaultCheckout()
         buildDiscarder(logRotator(numToKeepStr: '10'))
     }
 
     environment {
         PACKAGE_NAME    = 'count-files'
         PACKAGE_VERSION = '1.0'
-        WORKSPACE_PATH  = "${WORKSPACE}"
     }
 
     stages {
@@ -28,6 +26,7 @@ pipeline {
                 }
             }
             steps {
+                checkout scm
                 sh 'shellcheck count_files.sh'
             }
         }
@@ -42,24 +41,22 @@ pipeline {
                         }
                     }
                     steps {
+                        checkout scm
                         sh '''
                             dnf install -y rpm-build rpmdevtools
                             rpmdev-setuptree
                             mkdir -p ~/rpmbuild/SOURCES/${PACKAGE_NAME}-${PACKAGE_VERSION}
                             cp count_files.sh ~/rpmbuild/SOURCES/${PACKAGE_NAME}-${PACKAGE_VERSION}/
                             cp count_files.sh ~/rpmbuild/SOURCES/${PACKAGE_NAME}-${PACKAGE_VERSION}/count_files 2>/dev/null || true
-                            cd ~/rpmbuild/SOURCES
-                            tar czvf ${PACKAGE_NAME}-${PACKAGE_VERSION}.tar.gz ${PACKAGE_NAME}-${PACKAGE_VERSION}
-                            cp ${PACKAGE_NAME}-${PACKAGE_VERSION}.tar.gz ${PACKAGE_NAME}.tar.gz 2>/dev/null || true
-                            cp ${WORKSPACE_PATH}/packaging/rpm/count-files.spec ~/rpmbuild/SPECS/
-                            cd ~/rpmbuild/SPECS
-                            rpmbuild -ba count-files.spec
-                            find ~/rpmbuild/RPMS/ -name "*.rpm" -exec cp {} ${WORKSPACE_PATH}/ \\;
-                            cd ${WORKSPACE_PATH}
-                            ls -la *.rpm 2>/dev/null || true
+                            tar czvf ~/rpmbuild/SOURCES/${PACKAGE_NAME}-${PACKAGE_VERSION}.tar.gz -C ~/rpmbuild/SOURCES ${PACKAGE_NAME}-${PACKAGE_VERSION}
+                            cp ~/rpmbuild/SOURCES/${PACKAGE_NAME}-${PACKAGE_VERSION}.tar.gz ~/rpmbuild/SOURCES/${PACKAGE_NAME}.tar.gz 2>/dev/null || true
+                            cp packaging/rpm/count-files.spec ~/rpmbuild/SPECS/
+                            rpmbuild -ba ~/rpmbuild/SPECS/count-files.spec
+                            find ~/rpmbuild/RPMS/ -name "*.rpm" -exec cp {} . \;
+                            ls -la *.rpm
                             chown -R 1000:1000 *.rpm 2>/dev/null || true
                         '''
-                        stash includes: '*.rpm', name: 'rpm-package', allowEmpty: true
+                        stash includes: '*.rpm', name: 'rpm-package'
                         sh 'rm -f *.rpm'
                     }
                 }
@@ -72,6 +69,7 @@ pipeline {
                         }
                     }
                     steps {
+                        checkout scm
                         sh '''
                             apt-get update
                             apt-get install -y build-essential debhelper devscripts
@@ -82,12 +80,12 @@ pipeline {
                             cd build/${PACKAGE_NAME}-${PACKAGE_VERSION}
                             chmod +x count_files count_files.sh
                             dpkg-buildpackage -us -uc -b
-                            cp ../*.deb ${WORKSPACE_PATH}/ 2>/dev/null || true
-                            cd ${WORKSPACE_PATH}
-                            ls -la *.deb 2>/dev/null || true
+                            cd ../..
+                            cp build/*.deb . 2>/dev/null || cp *.deb . 2>/dev/null || cp ../*.deb . 2>/dev/null || true
+                            ls -la *.deb
                             chown -R 1000:1000 *.deb 2>/dev/null || true
                         '''
-                        stash includes: '*.deb', name: 'deb-package', allowEmpty: true
+                        stash includes: '*.deb', name: 'deb-package'
                         sh 'rm -f *.deb'
                     }
                 }
@@ -106,7 +104,7 @@ pipeline {
                     steps {
                         unstash 'rpm-package'
                         sh '''
-                            rpm -ivh *.rpm || true
+                            rpm -ivh *.rpm
                             count_files || count_files.sh || true
                             rpm -e ${PACKAGE_NAME} 2>/dev/null || true
                             rm -f *.rpm
@@ -149,7 +147,7 @@ pipeline {
                     git config user.email "jenkins@localhost" || true
                     git tag -a "v${PACKAGE_VERSION}.${BUILD_NUMBER}" -m "Release version ${PACKAGE_VERSION}.${BUILD_NUMBER} built by Jenkins #${BUILD_NUMBER}" || true
                 '''
-                stash includes: 'repo/**/*', name: 'repository-artifacts', allowEmpty: true
+                stash includes: 'repo/**/*', name: 'repository-artifacts'
             }
         }
 
@@ -158,7 +156,7 @@ pipeline {
                 unstash 'rpm-package'
                 unstash 'deb-package'
                 unstash 'repository-artifacts'
-                archiveArtifacts artifacts: '*.rpm, *.deb, repo/**/*', allowEmptyArchive: true
+                archiveArtifacts artifacts: '*.rpm, *.deb, repo/**/*'
             }
         }
     }
