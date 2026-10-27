@@ -134,8 +134,8 @@ pipeline {
                 unstash 'deb-package'
                 sh '''
                     mkdir -p repo/rpm repo/deb
-                    cp *.rpm repo/rpm/
-                    cp *.deb repo/deb/
+                    cp *.rpm repo/rpm/ 2>/dev/null || true
+                    cp *.deb repo/deb/ 2>/dev/null || true
                     echo "Repository structure generated for version ${PACKAGE_VERSION}" > repo/README.md
                 '''
                 sh '''
