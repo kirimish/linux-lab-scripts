@@ -8,8 +8,7 @@ pipeline {
 
     environment {
         PACKAGE_NAME    = 'count-files'
-        BASE_VERSION    = '1.0'
-        PACKAGE_VERSION = "${BASE_VERSION}.${BUILD_NUMBER}"
+        PACKAGE_VERSION = '1.0'
         WORKSPACE_PATH  = "${WORKSPACE}"
     }
 
@@ -51,9 +50,11 @@ pipeline {
                             cd ~/rpmbuild/SOURCES
                             tar czvf ${PACKAGE_NAME}-${PACKAGE_VERSION}.tar.gz ${PACKAGE_NAME}-${PACKAGE_VERSION}
                             cp ${WORKSPACE_PATH}/packaging/rpm/count-files.spec ~/rpmbuild/SPECS/
-                            rpmbuild -ba ~/rpmbuild/SPECS/count-files.spec || true
-                            cp ~/rpmbuild/RPMS/noarch/*.rpm ${WORKSPACE_PATH}/ || cp ~/rpmbuild/RPMS/*/*.rpm ${WORKSPACE_PATH}/
-                            chown -R 1000:1000 ${WORKSPACE_PATH}/*.rpm
+                            cd ~/rpmbuild/SPECS
+                            rpmbuild -ba count-files.spec
+                            cp ~/rpmbuild/RPMS/noarch/*.rpm ${WORKSPACE_PATH}/ 2>/dev/null || cp ~/rpmbuild/RPMS/*/*.rpm ${WORKSPACE_PATH}/ 2>/dev/null || true
+                            cd ${WORKSPACE_PATH}
+                            chown -R 1000:1000 *.rpm 2>/dev/null || true
                         '''
                         stash includes: '*.rpm', name: 'rpm-package'
                         sh 'rm -f *.rpm'
@@ -78,8 +79,9 @@ pipeline {
                             cd build/${PACKAGE_NAME}-${PACKAGE_VERSION}
                             chmod +x count_files count_files.sh
                             dpkg-buildpackage -us -uc -b
-                            cp ../*.deb ${WORKSPACE_PATH}/
-                            chown -R 1000:1000 ${WORKSPACE_PATH}/*.deb
+                            cp ../*.deb ${WORKSPACE_PATH}/ 2>/dev/null || true
+                            cd ${WORKSPACE_PATH}
+                            chown -R 1000:1000 *.deb 2>/dev/null || true
                         '''
                         stash includes: '*.deb', name: 'deb-package'
                         sh 'rm -f *.deb'
@@ -139,7 +141,9 @@ pipeline {
                     echo "Repository structure generated for version ${PACKAGE_VERSION}" > repo/README.md
                 '''
                 sh '''
-                    git tag -a "v${PACKAGE_VERSION}" -m "Release version ${PACKAGE_VERSION} built by Jenkins #${BUILD_NUMBER}" || true
+                    git config user.name "Jenkins CI" || true
+                    git config user.email "jenkins@localhost" || true
+                    git tag -a "v${PACKAGE_VERSION}.${BUILD_NUMBER}" -m "Release version ${PACKAGE_VERSION}.${BUILD_NUMBER} built by Jenkins #${BUILD_NUMBER}" || true
                 '''
                 stash includes: 'repo/**/*', name: 'repository-artifacts'
             }
@@ -149,6 +153,7 @@ pipeline {
             steps {
                 unstash 'rpm-package'
                 unstash 'deb-package'
+                unstash 'repository-artifacts'
                 archiveArtifacts artifacts: '*.rpm, *.deb, repo/**/*', allowEmptyArchive: false
             }
         }
