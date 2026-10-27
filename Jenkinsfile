@@ -52,7 +52,7 @@ pipeline {
                             cp ~/rpmbuild/SOURCES/${PACKAGE_NAME}-${PACKAGE_VERSION}.tar.gz ~/rpmbuild/SOURCES/${PACKAGE_NAME}.tar.gz 2>/dev/null || true
                             cp packaging/rpm/count-files.spec ~/rpmbuild/SPECS/
                             rpmbuild -ba ~/rpmbuild/SPECS/count-files.spec
-                            find ~/rpmbuild/RPMS/ -name "*.rpm" -exec cp {} . \;
+                            find ~/rpmbuild/RPMS/ -name "*.rpm" -exec cp {} . '+'
                             ls -la *.rpm
                             chown -R 1000:1000 *.rpm 2>/dev/null || true
                         '''
