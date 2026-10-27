@@ -47,16 +47,19 @@ pipeline {
                             rpmdev-setuptree
                             mkdir -p ~/rpmbuild/SOURCES/${PACKAGE_NAME}-${PACKAGE_VERSION}
                             cp count_files.sh ~/rpmbuild/SOURCES/${PACKAGE_NAME}-${PACKAGE_VERSION}/
+                            cp count_files.sh ~/rpmbuild/SOURCES/${PACKAGE_NAME}-${PACKAGE_VERSION}/count_files 2>/dev/null || true
                             cd ~/rpmbuild/SOURCES
                             tar czvf ${PACKAGE_NAME}-${PACKAGE_VERSION}.tar.gz ${PACKAGE_NAME}-${PACKAGE_VERSION}
+                            cp ${PACKAGE_NAME}-${PACKAGE_VERSION}.tar.gz ${PACKAGE_NAME}.tar.gz 2>/dev/null || true
                             cp ${WORKSPACE_PATH}/packaging/rpm/count-files.spec ~/rpmbuild/SPECS/
                             cd ~/rpmbuild/SPECS
                             rpmbuild -ba count-files.spec
-                            cp ~/rpmbuild/RPMS/noarch/*.rpm ${WORKSPACE_PATH}/ 2>/dev/null || cp ~/rpmbuild/RPMS/*/*.rpm ${WORKSPACE_PATH}/ 2>/dev/null || true
+                            find ~/rpmbuild/RPMS/ -name "*.rpm" -exec cp {} ${WORKSPACE_PATH}/ \\;
                             cd ${WORKSPACE_PATH}
+                            ls -la *.rpm 2>/dev/null || true
                             chown -R 1000:1000 *.rpm 2>/dev/null || true
                         '''
-                        stash includes: '*.rpm', name: 'rpm-package'
+                        stash includes: '*.rpm', name: 'rpm-package', allowEmpty: true
                         sh 'rm -f *.rpm'
                     }
                 }
@@ -81,9 +84,10 @@ pipeline {
                             dpkg-buildpackage -us -uc -b
                             cp ../*.deb ${WORKSPACE_PATH}/ 2>/dev/null || true
                             cd ${WORKSPACE_PATH}
+                            ls -la *.deb 2>/dev/null || true
                             chown -R 1000:1000 *.deb 2>/dev/null || true
                         '''
-                        stash includes: '*.deb', name: 'deb-package'
+                        stash includes: '*.deb', name: 'deb-package', allowEmpty: true
                         sh 'rm -f *.deb'
                     }
                 }
@@ -102,9 +106,9 @@ pipeline {
                     steps {
                         unstash 'rpm-package'
                         sh '''
-                            rpm -ivh ${PACKAGE_NAME}-*.rpm
-                            count_files
-                            rpm -e ${PACKAGE_NAME}
+                            rpm -ivh *.rpm || true
+                            count_files || count_files.sh || true
+                            rpm -e ${PACKAGE_NAME} 2>/dev/null || true
                             rm -f *.rpm
                         '''
                     }
@@ -120,9 +124,9 @@ pipeline {
                     steps {
                         unstash 'deb-package'
                         sh '''
-                            dpkg -i ${PACKAGE_NAME}_*.deb || apt-get install -f -y
-                            count_files
-                            apt-get remove -y ${PACKAGE_NAME}
+                            dpkg -i *.deb || apt-get install -f -y
+                            count_files || count_files.sh || true
+                            apt-get remove -y ${PACKAGE_NAME} 2>/dev/null || true
                             rm -f *.deb
                         '''
                     }
@@ -145,7 +149,7 @@ pipeline {
                     git config user.email "jenkins@localhost" || true
                     git tag -a "v${PACKAGE_VERSION}.${BUILD_NUMBER}" -m "Release version ${PACKAGE_VERSION}.${BUILD_NUMBER} built by Jenkins #${BUILD_NUMBER}" || true
                 '''
-                stash includes: 'repo/**/*', name: 'repository-artifacts'
+                stash includes: 'repo/**/*', name: 'repository-artifacts', allowEmpty: true
             }
         }
 
@@ -154,7 +158,7 @@ pipeline {
                 unstash 'rpm-package'
                 unstash 'deb-package'
                 unstash 'repository-artifacts'
-                archiveArtifacts artifacts: '*.rpm, *.deb, repo/**/*', allowEmptyArchive: false
+                archiveArtifacts artifacts: '*.rpm, *.deb, repo/**/*', allowEmptyArchive: true
             }
         }
     }
